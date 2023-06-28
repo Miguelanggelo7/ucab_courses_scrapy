@@ -1,0 +1,5 @@
+scrapy_env/
+comandos
+/courses/spiders/__pycache__
+/courses/__pycache__
+.env
