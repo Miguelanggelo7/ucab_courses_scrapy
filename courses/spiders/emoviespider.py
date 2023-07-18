@@ -1,5 +1,6 @@
 import scrapy
-from courses.items import CoursesItem
+from urllib.parse import urljoin
+
 
 class EmoviesSpider(scrapy.Spider):
     name = 'emovies'
@@ -12,7 +13,7 @@ class EmoviesSpider(scrapy.Spider):
         for div_element in div_elements:
             try:
                 # Obtener el título
-                title = div_element.xpath('.//h3/text()').get()
+                titulo = div_element.xpath('.//h3/text()').get()
 
                 # Obtener los elementos div.details__item dentro del div.course__inner
                 details_elements = div_element.xpath('.//div[contains(@class, "details__item")]')
@@ -20,7 +21,7 @@ class EmoviesSpider(scrapy.Spider):
                 # Inicializar variables para los campos de información
                 university = ""
                 career = ""
-                typeOf = ""
+                tipo = ""
                 startDate = ""
                 endDate = ""
                 url = ""
@@ -37,7 +38,7 @@ class EmoviesSpider(scrapy.Spider):
                     elif "Programa académico / Academic Program" in strong_text:
                         career = text
                     elif "Nivel des programa / Program Level" in strong_text:
-                        typeOf = text
+                        tipo = text
                     elif "Fecha de inicio curso / Course start date" in strong_text:
                         startDate = text.strip()
                     elif "Fecha de terminación / Course finish date" in strong_text:
@@ -47,16 +48,21 @@ class EmoviesSpider(scrapy.Spider):
                 url = div_element.css('a.button--white::attr(href)').get()
 
                 # Crear el objeto con la información
-                item = CoursesItem()
-                item['title'] = title
-                item['type'] = typeOf
-                item['career'] = career
-                item['university'] = university
-                item['startDate'] = startDate
-                item['endDate'] = endDate
-                item['url'] = url
-    
-                yield item
+                objeto = {
+                    "title": titulo,
+                    "type": tipo,
+                    "career": career,
+                    "university": university,
+                    "startDate": startDate,
+                    "endDate": endDate,
+                    "url": url
+                }
+
+                # Construir la URL completa del curso
+                absolute_url = urljoin(response.url, url)
+
+                # Realizar una solicitud a la URL del curso
+                yield scrapy.Request(absolute_url, callback=self.parse_requirements, meta={'objeto': objeto})
             except:
                 pass
 
@@ -65,3 +71,25 @@ class EmoviesSpider(scrapy.Spider):
 
         if next_page:
             yield response.follow(next_page, callback=self.parse)
+
+    def parse_requirements(self, response):
+        # Obtener todos los elementos dentro del div.contents dentro del div#acc-1
+        content_elements = response.css('div#acc-1 div.contents *').getall()
+
+        # Concatenar y limpiar el texto de todos los elementos
+        requirements = ' '.join(response.xpath('//div[@id="acc-1"]/div[contains(@class, "contents")]//text()').getall()).strip()
+
+        # Obtener el contenido dentro del div de descripción del curso
+        description_elements = response.xpath('//div[@class="text"]/node()')
+
+        # Concatenar y limpiar el texto de todos los elementos
+        description = ' '.join(description_elements.xpath('string()').getall()).strip()
+
+        # Obtener el objeto de la respuesta original
+        objeto = response.meta['objeto']
+
+        # Agregar los requisitos y descripcion al objeto
+        objeto['requirements'] = requirements
+        objeto['description'] = description
+
+        yield objeto
